@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF Optimizer → Phone Fixer</title>
+  <meta name="description" content="Fix Aras CF Optimizer configs for phone clients (Streisand, V2Box). Replaces ext:geoip-only-cn-private.dat rules with standard geoip tags." />
+  <meta name="theme-color" content="#0f1117" />
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --border: #2a2f3d;
+      --text: #e6e9f0;
+      --muted: #9aa3b5;
+      --accent: #6c8cff;
+      --success: #3dd68c;
+      --danger: #ff6b6b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 1.6rem;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 28px;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      background: #12151e;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      resize: vertical;
+      outline: none;
+    }
+    textarea:focus {
+      border-color: var(--accent);
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    button:hover { opacity: 0.9; }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+    .btn-secondary {
+      background: #2a2f3d;
+      color: var(--text);
+    }
+    .btn-success {
+      background: var(--success);
+      color: #0b1a12;
+    }
+    .status {
+      margin-top: 12px;
+      font-size: 0.9rem;
+      min-height: 1.4em;
+    }
+    .status.ok { color: var(--success); }
+    .status.err { color: var(--danger); }
+    .status.info { color: var(--muted); }
+    .fixes {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 8px;
+      white-space: pre-wrap;
+    }
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📱 CF Optimizer → Phone Fixer</h1>
+    <p class="subtitle">
+      Paste the JSON from <a href="https://arastey.github.io/cf-optimizor/" target="_blank">arastey.github.io/cf-optimizor</a>
+      and get a version that works on phone clients (Streisand, V2Box, etc.).
+    </p>
+
+    <div class="card">
+      <label for="input">Input (from Aras Optimizer)</label>
+      <textarea id="input" placeholder="Paste the full JSON array or single config object here..."></textarea>
+
+      <div class="actions">
+        <button class="btn-primary" onclick="fixConfig()">Fix for Phone</button>
+        <button class="btn-secondary" onclick="clearAll()">Clear</button>
+        <button class="btn-secondary" onclick="pasteFromClipboard()">Paste from Clipboard</button>
+      </div>
+      <div id="status" class="status"></div>
+      <div id="fixes" class="fixes"></div>
+    </div>
+
+    <div class="card">
+      <label for="output">Fixed Output (ready for phone)</label>
+      <textarea id="output" readonly placeholder="Fixed config will appear here..."></textarea>
+
+      <div class="actions">
+        <button class="btn-success" id="copyBtn" onclick="copyOutput()" disabled>Copy Fixed Config</button>
+        <button class="btn-secondary" id="downloadBtn" onclick="downloadOutput()" disabled>Download .json</button>
+      </div>
+    </div>
+
+    <footer>
+      Runs 100% in your browser · Nothing is uploaded · Fixes <code>ext:geoip-only-cn-private.dat</code> for phone clients<br>
+      Open source · Compatible with output from <a href="https://arastey.github.io/cf-optimizor/" target="_blank" rel="noopener">arastey.github.io/cf-optimizor</a>
+    </footer>
+  </div>
+
+  <script>
+    const REPLACEMENTS = [
+      {
+        from: /ext:geoip-only-cn-private\.dat:private/g,
+        to: "geoip:private",
+        label: "ext:geoip-only-cn-private.dat:private → geoip:private"
+      },
+      {
+        from: /ext:geoip-only-cn-private\.dat:cn/g,
+        to: "geoip:cn",
+        label: "ext:geoip-only-cn-private.dat:cn → geoip:cn"
+      },
+      // Extra safety for other common variants some optimizers produce
+      {
+        from: /ext:geoip-only-cn-private\.dat:private/gi,
+        to: "geoip:private",
+        label: null
+      }
+    ];
+
+    function setStatus(msg, type = "info") {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.className = "status " + type;
+    }
+
+    function setFixes(text) {
+      document.getElementById("fixes").textContent = text;
+    }
+
+    function clearAll() {
+      document.getElementById("input").value = "";
+      document.getElementById("output").value = "";
+      document.getElementById("copyBtn").disabled = true;
+      document.getElementById("downloadBtn").disabled = true;
+      setStatus("");
+      setFixes("");
+    }
+
+    async function pasteFromClipboard() {
+      try {
+        const text = await navigator.clipboard.readText();
+        document.getElementById("input").value = text;
+        setStatus("Pasted from clipboard", "ok");
+      } catch (e) {
+        setStatus("Could not read clipboard. Paste manually.", "err");
+      }
+    }
+
+    function fixConfig() {
+      const raw = document.getElementById("input").value.trim();
+      if (!raw) {
+        setStatus("Please paste a config first.", "err");
+        return;
+      }
+
+      let fixed = raw;
+      const applied = [];
+
+      // Apply string replacements (works even if JSON is slightly malformed)
+      REPLACEMENTS.forEach(r => {
+        if (r.from.test(fixed)) {
+          fixed = fixed.replace(r.from, r.to);
+          if (r.label) applied.push("✓ " + r.label);
+        }
+      });
+
+      // Try to pretty-print if it's valid JSON
+      try {
+        const parsed = JSON.parse(fixed);
+        fixed = JSON.stringify(parsed, null, 2);
+      } catch (e) {
+        // Keep as-is if not valid JSON (user can still use it)
+      }
+
+      document.getElementById("output").value = fixed;
+      document.getElementById("copyBtn").disabled = false;
+      document.getElementById("downloadBtn").disabled = false;
+
+      if (applied.length) {
+        setStatus("Fixed successfully!", "ok");
+        setFixes(applied.join("\n"));
+      } else {
+        setStatus("No known geoip-only rules found. Config left unchanged (still copied).", "info");
+        setFixes("No replacements needed.");
+      }
+    }
+
+    async function copyOutput() {
+      const text = document.getElementById("output").value;
+      try {
+        await navigator.clipboard.writeText(text);
+        setStatus("Copied to clipboard!", "ok");
+      } catch (e) {
+        setStatus("Copy failed. Select and copy manually.", "err");
+      }
+    }
+
+    function downloadOutput() {
+      const text = document.getElementById("output").value;
+      const blob = new Blob([text], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "fixed-config.json";
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus("Download started", "ok");
+    }
+  </script>
+</body>
+</html>
